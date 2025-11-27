@@ -36,6 +36,7 @@ def get_umap_embeddings_of_dataset(
     i = 1
     for p in paths:
         print(f"Image {i}/{len(paths)}            ", end="\r")
+        i += 1
         img = Image.open(p).convert("RGB")
         imgs.append(np.array(img, dtype=np.float32) / 255.0)
     imgs = np.stack(imgs, axis=0)  # (N, H, W, 3)
