@@ -52,3 +52,7 @@ def get_umap_embeddings_of_dataset(
     print(f"Embeddings saved to: {out_file}")
 
     return embeddings  # type: ignore
+
+
+if __name__ == "__main__":
+    get_umap_embeddings_of_dataset(process_size=0.1)
