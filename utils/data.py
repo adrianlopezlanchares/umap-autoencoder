@@ -1,6 +1,10 @@
 import subprocess
-from pathlib import Path
 import zipfile
+from pathlib import Path
+
+import numpy as np
+import torch
+from torch.utils.data import Dataset
 
 
 def download_data() -> None:
@@ -37,3 +41,15 @@ def download_data() -> None:
     output_file.unlink()
 
     print("Done")
+
+
+class UMAPImageDataset(Dataset):
+    def __init__(self, images: np.ndarray, umap_embeddings: np.ndarray) -> None:
+        self.images = torch.tensor(images)
+        self.umap_embeddings = torch.tensor(umap_embeddings)
+
+    def __len__(self) -> int:
+        return len(self.images)
+
+    def __getitem__(self, idx):
+        return self.images[idx], self.umap_embeddings[idx]
