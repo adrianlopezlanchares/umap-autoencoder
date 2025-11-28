@@ -18,7 +18,7 @@ def compute_umap_on_images(process_size: float = 0.01, embedding_dim: int = 2) -
 
     flat_images = images.reshape(images.shape[0], -1)
     reducer = umap.UMAP(n_components=embedding_dim)
-    embeddings = reducer.fit_transform(flat_images, verbose=True)
+    embeddings = reducer.fit_transform(flat_images)
 
     # Save embeddings to a file
     project_dir = Path("..").resolve()
