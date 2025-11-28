@@ -170,6 +170,40 @@ def get_mnist_image_np_arrays() -> Tuple[np.ndarray, np.ndarray]:
     return train_images, test_images
 
 
+def get_mnnist_labels_np_arrays() -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Load labels from the MNIST dataset and return them as a numpy array.
+
+    Returns:
+        np.ndarray: Array of labels with shape (N,)
+    """
+    project_root = Path(__file__).resolve().parents[1]
+    data_dir = project_root / "data" / "mnist" / "images"
+    data_dir.mkdir(exist_ok=True)
+    train_labels_dir = data_dir / "train-labels-idx1-ubyte" / "train-labels-idx1-ubyte"
+    test_labels_dir = data_dir / "t10k-labels-idx1-ubyte" / "t10k-labels-idx1-ubyte"
+
+    with train_labels_dir.open("rb") as f:
+        magic, num_labels = struct.unpack(">II", f.read(8))
+        if magic != 2049:
+            raise ValueError(f"Invalid magic number {magic}, expected 2049")
+
+        train_labels = np.frombuffer(f.read(), dtype=np.uint8)
+
+    with test_labels_dir.open("rb") as f:
+        magic, num_labels = struct.unpack(">II", f.read(8))
+        if magic != 2049:
+            raise ValueError(f"Invalid magic number {magic}, expected 2049")
+
+        test_labels = np.frombuffer(f.read(), dtype=np.uint8)
+
+    # Turn labels from numbers into one-hot encoded vectors
+    train_labels = np.eye(10)[train_labels]
+    test_labels = np.eye(10)[test_labels]
+
+    return train_labels, test_labels
+
+
 class UMAPImageDataset(Dataset):
     def __init__(self, images: np.ndarray, umap_embeddings: np.ndarray) -> None:
         self.images = torch.tensor(images)
@@ -180,3 +214,15 @@ class UMAPImageDataset(Dataset):
 
     def __getitem__(self, idx):
         return self.images[idx], self.umap_embeddings[idx]
+
+
+class ClassificationDataset(Dataset):
+    def __init__(self, images: np.ndarray, labels: np.ndarray) -> None:
+        self.images = torch.tensor(images)
+        self.labels = torch.tensor(labels)
+
+    def __len__(self) -> int:
+        return len(self.images)
+
+    def __getitem__(self, idx):
+        return self.images[idx], self.labels[idx]

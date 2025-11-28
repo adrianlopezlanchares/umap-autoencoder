@@ -3,6 +3,46 @@ import torch
 from utils.loss import UMAPAutoencoderLoss
 
 
+def train_autoencoder(
+    model: torch.nn.Module,
+    dataloader: torch.utils.data.DataLoader,
+    criterion: torch.nn.Module,
+    optimizer: torch.optim.Optimizer,
+    num_epochs: int,
+    device: torch.device,
+) -> None:
+    """
+    Train the autoencoder model.
+
+    Args:
+        model (torch.nn.Module): The autoencoder model to train.
+        dataloader (torch.utils.data.DataLoader): DataLoader for training data.
+        num_epochs (int): Number of epochs to train.
+        learning_rate (float): Learning rate for the optimizer.
+        device (torch.device): Device to run the training on (CPU or GPU).
+    """
+    model.to(device)
+    criterion.to(device)
+
+    model.train()
+    for epoch in range(num_epochs):
+        epoch_loss = 0.0
+        for batch_images, _ in dataloader:
+            batch_images = batch_images.to(device).float()
+
+            optimizer.zero_grad()
+            outputs = model(batch_images)
+            loss = criterion(outputs, batch_images)
+            loss.backward()
+            optimizer.step()
+            epoch_loss += loss.item() * batch_images.size(0)
+
+        epoch_loss /= len(dataloader.dataset)
+        print(f"Epoch [{epoch + 1}/{num_epochs}], Loss: {epoch_loss:.4f}")
+
+    print("Training complete.")
+
+
 def train_autoencoder_with_umap(
     model: torch.nn.Module,
     dataloader: torch.utils.data.DataLoader,
