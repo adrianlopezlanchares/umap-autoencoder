@@ -1,6 +1,8 @@
 import subprocess
 import zipfile
 from pathlib import Path
+import struct
+from typing import Tuple
 
 import numpy as np
 from PIL import Image
@@ -59,14 +61,15 @@ def download_mnist_data() -> None:
     Download the MNIST dataset from Kaggle to the project root, under /data.
     """
     project_root = Path(__file__).resolve().parents[1]
-    data_dir = project_root / "data" / "mnist"
-    data_dir.mkdir(exist_ok=True)
+    data_dir = project_root / "data" / "mnist" / "images"
 
     output_file = data_dir / "mnist-dataset.zip"
 
     if data_dir.exists():
         print("Data is already downloaded. Skipping download.")
         return
+
+    data_dir.mkdir(exist_ok=True)
 
     subprocess.run(
         [
@@ -89,13 +92,14 @@ def download_mnist_data() -> None:
     print("Done")
 
 
-def get_image_np_arrays(dataset: str, process_size: float = 0.01) -> np.ndarray:
+def get_celeba_image_np_arrays(
+    process_size: float = 0.01, train_size: float = 0.8
+) -> Tuple[np.ndarray, np.ndarray]:
     """
     Load images from the CelebA dataset and return them as a numpy array.
     The images are resized to 64x64 pixels.
 
     Args:
-        dataset: Name of the dataset to use. Supported: "celeba", "mnist".
         process_size: Percentage of files to process. Between 0 and 1. Defaults to 0.01.
 
     Returns:
@@ -116,16 +120,50 @@ def get_image_np_arrays(dataset: str, process_size: float = 0.01) -> np.ndarray:
         print(f"Image {i}/{len(paths)}            ", end="\r")
         i += 1
 
-        img = Image.open(p).convert("RGB")
-        if dataset == "celeba" or dataset == "img_align_celeba":
-            img = img.resize((64, 64))
-
+        img = Image.open(p).convert("RGB").resize((64, 64))
         imgs.append(np.array(img, dtype=np.float32) / 255.0)
 
     imgs = np.stack(imgs, axis=0)  # (N, H, W, 3)
     print(f"{len(imgs)} images loaded")
 
-    return imgs
+    n_train = int(len(imgs) * train_size)
+    train_imgs = imgs[:n_train]
+    test_imgs = imgs[n_train:]
+
+    return train_imgs, test_imgs
+
+
+def get_mnist_image_np_arrays() -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Load images from the MNIST dataset and return them as a numpy array.
+    The images are resized to 28x28 pixels.
+
+    Returns:
+        np.ndarray: Array of images with shape (N, 28, 28)
+    """
+    project_root = Path(__file__).resolve().parents[1]
+    data_dir = project_root / "data" / "mnist" / "images"
+    data_dir.mkdir(exist_ok=True)
+    train_images_dir = data_dir / "train-images-idx3-ubyte" / "train-images-idx3-ubyte"
+    test_images_dir = data_dir / "t10k-images-idx3-ubyte" / "t10k-images-idx3-ubyte"
+
+    with train_images_dir.open("rb") as f:
+        magic, num_images, rows, cols = struct.unpack(">IIII", f.read(16))
+        if magic != 2051:
+            raise ValueError(f"Invalid magic number {magic}, expected 2051")
+
+        train_images = np.frombuffer(f.read(), dtype=np.uint8)
+        train_images = train_images.reshape(num_images, rows, cols)
+
+    with test_images_dir.open("rb") as f:
+        magic, num_images, rows, cols = struct.unpack(">IIII", f.read(16))
+        if magic != 2051:
+            raise ValueError(f"Invalid magic number {magic}, expected 2051")
+
+        test_images = np.frombuffer(f.read(), dtype=np.uint8)
+        test_images = test_images.reshape(num_images, rows, cols)
+
+    return train_images, test_images
 
 
 class UMAPImageDataset(Dataset):
