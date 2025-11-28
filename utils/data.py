@@ -8,7 +8,7 @@ import torch
 from torch.utils.data import Dataset
 
 
-def download_data() -> None:
+def download_celeba_data() -> None:
     """
     Download the CelebA dataset from Kaggle to the project root, under /data.
     """
@@ -44,7 +44,7 @@ def download_data() -> None:
     print("Done")
 
 
-def get_image_np_arrays(process_size: float = 0.01) -> np.ndarray:
+def get_celeba_image_np_arrays(process_size: float = 0.01) -> np.ndarray:
     """
     Load images from the CelebA dataset and return them as a numpy array.
     The images are resized to 64x64 pixels.
