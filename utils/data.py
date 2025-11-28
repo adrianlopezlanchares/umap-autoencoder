@@ -38,8 +38,18 @@ def download_celeba_data() -> None:
     with zipfile.ZipFile(output_file, "r") as z:
         z.extractall(data_dir)
 
-    print("Deleting zip...")
+    print("Deleting zip and unused files...")
     output_file.unlink()
+    # remove list_attr_celeba.csv, list_bbox_celeba.csv, list_eval_partition.csv and list_landmarks_align_celeba.csv
+    for file_name in [
+        "list_attr_celeba.csv",
+        "list_bbox_celeba.csv",
+        "list_eval_partition.csv",
+        "list_landmarks_align_celeba.csv",
+    ]:
+        file_path = data_dir / file_name
+        if file_path.exists():
+            file_path.unlink()
 
     print("Done")
 
@@ -49,13 +59,12 @@ def download_mnist_data() -> None:
     Download the MNIST dataset from Kaggle to the project root, under /data.
     """
     project_root = Path(__file__).resolve().parents[1]
-    data_dir = project_root / "data"
+    data_dir = project_root / "data" / "mnist"
     data_dir.mkdir(exist_ok=True)
 
-    img_folder = data_dir / "mnist"
     output_file = data_dir / "mnist-dataset.zip"
 
-    if img_folder.exists():
+    if data_dir.exists():
         print("Data is already downloaded. Skipping download.")
         return
 
