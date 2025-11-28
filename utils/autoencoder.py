@@ -1,9 +1,9 @@
 import torch
 
 
-class Autoencoder(torch.nn.Module):
+class MNISTAutoencoder(torch.nn.Module):
     def __init__(self, input_dim: int, embedding_dim: int):
-        super(Autoencoder, self).__init__()
+        super(MNISTAutoencoder, self).__init__()
         self.encoder = torch.nn.Sequential(
             torch.nn.Linear(input_dim, 512),
             torch.nn.ReLU(),

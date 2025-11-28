@@ -163,6 +163,10 @@ def get_mnist_image_np_arrays() -> Tuple[np.ndarray, np.ndarray]:
         test_images = np.frombuffer(f.read(), dtype=np.uint8)
         test_images = test_images.reshape(num_images, rows, cols)
 
+    # Normalize images to [0, 1]
+    train_images = train_images.astype(np.float32) / 255.0
+    test_images = test_images.astype(np.float32) / 255.0
+
     return train_images, test_images
 
 
