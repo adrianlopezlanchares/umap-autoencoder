@@ -118,7 +118,6 @@ def test_autoencoder_reconstruction(
             total_loss += loss.item() * batch_images.size(0)
 
     average_loss = total_loss / len(dataloader.dataset)
-    print(f"Test Reconstruction Loss: {average_loss:.4f}")
     return average_loss
 
 
@@ -152,5 +151,4 @@ def test_autoencoder_umap_embedding(
             total_loss += loss.item() * batch_images.size(0)
 
     average_loss = total_loss / len(dataloader.dataset)
-    print(f"Test UMAP Embedding Loss: {average_loss:.4f}")
     return average_loss
