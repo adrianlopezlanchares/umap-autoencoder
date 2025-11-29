@@ -8,7 +8,7 @@ import numpy as np
 from PIL import Image
 import torch
 from torch.utils.data import Dataset
-from torchvision import datasets, transforms
+from torchvision import datasets
 
 
 def download_celeba_data() -> None:
