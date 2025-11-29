@@ -214,15 +214,3 @@ class UMAPImageDataset(Dataset):
 
     def __getitem__(self, idx):
         return self.images[idx], self.umap_embeddings[idx]
-
-
-class ClassificationDataset(Dataset):
-    def __init__(self, images: np.ndarray, labels: np.ndarray) -> None:
-        self.images = torch.tensor(images)
-        self.labels = torch.tensor(labels)
-
-    def __len__(self) -> int:
-        return len(self.images)
-
-    def __getitem__(self, idx):
-        return self.images[idx], self.labels[idx]
