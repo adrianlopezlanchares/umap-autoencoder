@@ -69,7 +69,7 @@ def download_mnist_data() -> None:
         print("Data is already downloaded. Skipping download.")
         return
 
-    data_dir.mkdir(exist_ok=True)
+    data_dir.mkdir(parents=True, exist_ok=True)
 
     subprocess.run(
         [
