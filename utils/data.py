@@ -8,6 +8,7 @@ import numpy as np
 from PIL import Image
 import torch
 from torch.utils.data import Dataset
+from torchvision import datasets, transforms
 
 
 def download_celeba_data() -> None:
@@ -69,7 +70,7 @@ def download_mnist_data() -> None:
         print("Data is already downloaded. Skipping download.")
         return
 
-    data_dir.mkdir(exist_ok=True)
+    data_dir.mkdir(parents=True, exist_ok=True)
 
     subprocess.run(
         [
@@ -204,9 +205,121 @@ def get_mnnist_labels_np_arrays() -> Tuple[np.ndarray, np.ndarray]:
     return train_labels, test_labels
 
 
+def get_cifar10_image_np_arrays(train: bool = True) -> np.ndarray:
+    """
+    Load images from the CIFAR-10 dataset and return them as a numpy array.
+    The images are 32x32x3.
+
+    Args:
+        train: Whether to load training or test data.
+
+    Returns:
+        np.ndarray: Array of images with shape (N, 32, 32, 3) depending on format,
+                    normalized to [0, 1].
+    """
+    project_root = Path(__file__).resolve().parents[1]
+    data_dir = project_root / "data"
+    data_dir.mkdir(parents=True, exist_ok=True)
+
+    # CIFAR10 dataset
+    dataset = datasets.CIFAR10(
+        root=str(data_dir),
+        train=train,
+        download=True,
+        transform=None,  # We want raw numpy arrays first
+    )
+
+    # dataset.data is already a numpy array of shape (N, 32, 32, 3)
+    images = dataset.data.astype(np.float32) / 255.0
+
+    return images
+
+
+def get_cifar10_labels_np_arrays(train: bool = True) -> np.ndarray:
+    """
+    Load labels from the CIFAR-10 dataset and return them as a numpy array (one-hot).
+
+    Args:
+        train: Whether to load training or test data.
+
+    Returns:
+        np.ndarray: Array of labels with shape (N, 10)
+    """
+    project_root = Path(__file__).resolve().parents[1]
+    data_dir = project_root / "data"
+    data_dir.mkdir(parents=True, exist_ok=True)
+
+    dataset = datasets.CIFAR10(root=str(data_dir), train=train, download=True)
+
+    labels = np.array(dataset.targets)
+
+    # One-hot encode
+    labels = np.eye(10)[labels]
+
+    return labels
+
+
+def get_fashion_mnist_image_np_arrays(train: bool = True) -> np.ndarray:
+    """
+    Load images from the Fashion MNIST dataset and return them as a numpy array.
+    The images are 28x28.
+
+    Args:
+        train: Whether to load training or test data.
+
+    Returns:
+        np.ndarray: Array of images with shape (N, 28, 28),
+                    normalized to [0, 1].
+    """
+    project_root = Path(__file__).resolve().parents[1]
+    data_dir = project_root / "data"
+    data_dir.mkdir(parents=True, exist_ok=True)
+
+    # FashionMNIST dataset
+    dataset = datasets.FashionMNIST(
+        root=str(data_dir), train=train, download=True, transform=None
+    )
+
+    # dataset.data is a tensor of shape (N, 28, 28)
+    images = dataset.data.numpy().astype(np.float32) / 255.0
+
+    return images
+
+
+def get_fashion_mnist_labels_np_arrays(train: bool = True) -> np.ndarray:
+    """
+    Load labels from the Fashion MNIST dataset and return them as a numpy array (one-hot).
+
+    Args:
+        train: Whether to load training or test data.
+
+    Returns:
+        np.ndarray: Array of labels with shape (N, 10)
+    """
+    project_root = Path(__file__).resolve().parents[1]
+    data_dir = project_root / "data"
+    data_dir.mkdir(parents=True, exist_ok=True)
+
+    dataset = datasets.FashionMNIST(root=str(data_dir), train=train, download=True)
+
+    labels = dataset.targets.numpy()
+
+    # One-hot encode
+    labels = np.eye(10)[labels]
+
+    return labels
+
+
 class UMAPImageDataset(Dataset):
     def __init__(self, images: np.ndarray, umap_embeddings: np.ndarray) -> None:
+        # images expected to be (N, H, W, C) or (N, C, H, W)
+        # We'll convert to tensor. If it's (N, H, W, C), PyTorch usually expects (N, C, H, W).
+        # We will handle permutation in __getitem__ or init if needed.
         self.images = torch.tensor(images)
+        if self.images.ndim == 4 and self.images.shape[-1] == 3:
+            # (N, H, W, C) -> (N, C, H, W)
+            self.images = self.images.permute(0, 3, 1, 2)
+
         self.umap_embeddings = torch.tensor(umap_embeddings)
 
     def __len__(self) -> int:
@@ -214,3 +327,19 @@ class UMAPImageDataset(Dataset):
 
     def __getitem__(self, idx):
         return self.images[idx], self.umap_embeddings[idx]
+
+
+class ClassificationDataset(Dataset):
+    def __init__(self, images: np.ndarray, labels: np.ndarray) -> None:
+        self.images = torch.tensor(images)
+        if self.images.ndim == 4 and self.images.shape[-1] == 3:
+            # (N, H, W, C) -> (N, C, H, W)
+            self.images = self.images.permute(0, 3, 1, 2)
+
+        self.labels = torch.tensor(labels)
+
+    def __len__(self) -> int:
+        return len(self.images)
+
+    def __getitem__(self, idx):
+        return self.images[idx], self.labels[idx]
