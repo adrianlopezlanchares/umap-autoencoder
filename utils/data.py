@@ -15,7 +15,8 @@ import shutil
 # ==========================================================
 # DATA DIRECTORIES
 # ==========================================================
-DGX_ROOT = Path("/app")
+# DGX_ROOT = Path("/app")  # DGX root directory
+DGX_ROOT = Path(__file__).resolve().parents[1]  # Local root directory
 DATA_ROOT = DGX_ROOT / "data"
 DATA_DIR = DATA_ROOT / "img_align_celeba"
 
