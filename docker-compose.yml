@@ -1,0 +1,37 @@
+services:
+  umap-autoencoder:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: umap-autoencoder:latest
+    container_name: umap-autoencoder
+
+    runtime: nvidia
+
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+      - PYTHONUNBUFFERED=1
+      - PYTHONPATH=/app
+
+    volumes:
+      # Your code
+      - ./src:/app/src
+      - ./utils:/app/utils
+      - ./scripts:/app/scripts
+      - ./notebooks:/app/notebooks
+      - ./main.py:/app/main.py
+
+      # === PERSISTENT DATA STORAGE ===
+      - /home/202105547/workdata/GI/project/data:/app/data
+      - /home/202105547/workdata/GI/project/models:/app/models
+
+      # Optional cache
+      - ./cache:/app/.cache
+
+
+    working_dir: /app
+    stdin_open: true
+    tty: true
+    command: bash
+    restart: unless-stopped

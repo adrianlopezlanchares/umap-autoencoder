@@ -1,0 +1,12 @@
+ipykernel>=6.31.0
+ipywidgets>=8.1.8
+matplotlib>=3.9.4
+numpy>=2.0.2
+pillow>=11.3.0
+umap-learn>=0.5.9.post2
+# torch installed separately in Dockerfile with CUDA
+
+# For background removal
+mediapipe==0.10.14
+opencv-python-headless==4.11.0.86
+tqdm>=4.66.0
