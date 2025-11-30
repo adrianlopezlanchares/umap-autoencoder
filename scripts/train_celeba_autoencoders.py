@@ -1,5 +1,3 @@
-from pathlib import Path
-
 import torch
 import numpy as np
 import umap
@@ -17,39 +15,56 @@ from utils.train_functions import (
     train_autoencoder_with_umap,
 )
 
+from pathlib import Path
 
-def get_and_save_umap_embeddings(full_images, train_images, embedding_dim=1024):
+DGX_ROOT = Path("/app")              # inside the container
+DATA_DIR = DGX_ROOT / "data"         # maps to ~/workdata/GI/project/data
+MODEL_DIR = DGX_ROOT / "models"      # maps to ~/workdata/GI/project/models
+
+IMG_DIR     = DATA_DIR / "img_align_celeba"
+ORIGINAL_DIR = IMG_DIR / "original"
+CLEAN_DIR    = IMG_DIR / "clean"
+UMAP_DIR     = IMG_DIR / "umap_embeddings"
+UMAP_ORIGINAL_DIR = UMAP_DIR / "original"
+UMAP_CLEAN_DIR    = UMAP_DIR / "clean"
+
+
+def get_and_save_umap_embeddings(full_images, train_images, embedding_dim=1024, image_type="original"):
     flat_full_images = full_images.reshape(full_images.shape[0], -1)
     reducer = umap.UMAP(n_components=embedding_dim)
     full_embeddings = reducer.fit_transform(flat_full_images)
 
-    train_embeddings = full_embeddings[: len(train_images)]
-    test_embeddings = full_embeddings[len(train_images) :]
+    train_embeddings = full_embeddings[:len(train_images)]
+    test_embeddings = full_embeddings[len(train_images):]
 
-    # Save full embeddings to a file
-    project_dir = Path("..").resolve()
-    embeddings_file = (
-        project_dir
-        / "data"
-        / "img_align_celeba"
-        / "umap_embeddings"
-        / f"embeddings_d{embedding_dim}_n{len(full_images)}.npy"
-    )
+    # Select the right UMAP directory
+    if image_type == "clean":
+        embeddings_dir = UMAP_CLEAN_DIR
+    else:
+        embeddings_dir = UMAP_ORIGINAL_DIR
+
+    embeddings_dir.mkdir(parents=True, exist_ok=True)
+
+    embeddings_file = embeddings_dir / f"{image_type}_embeddings_d{embedding_dim}_n{len(full_images)}.npy"
+
+
     embeddings_file.parent.mkdir(parents=True, exist_ok=True)
     np.save(embeddings_file, full_embeddings)
 
     return full_embeddings, train_embeddings, test_embeddings
 
 
-def load_umap_embeddings(embedding_dim, num_images):
-    project_dir = Path(".").resolve()
-    data_dir = project_dir / "data" / "img_align_celeba" / "umap_embeddings"
-    embeddings_file = data_dir / f"embeddings_d{embedding_dim}_n{num_images}.npy"
+def load_umap_embeddings(embedding_dim, num_images, image_type="original"):
+    if image_type == "clean":
+        embeddings_dir = UMAP_CLEAN_DIR
+    else:
+        embeddings_dir = UMAP_ORIGINAL_DIR
 
-    full_embeddings = np.load(embeddings_file)
+    file = embeddings_dir / f"{image_type}_embeddings_d{embedding_dim}_n{num_images}.npy"
 
-    return full_embeddings
+    print(f"→ Loading UMAP embeddings from {file}")
 
+    return np.load(file)
 
 def get_train_test_dataloaders(
     train_images,
@@ -81,29 +96,53 @@ def main():
     download_celeba_data()
 
     print("Loading CelebA images...")
-    # Ejecutar el 100% en el cluster?
-    train_images, test_images = get_celeba_image_np_arrays(process_size=0.1)
+    # Choose whether to use original or cleaned images
+    # Choose the image type for the entire run
+    image_type = "clean"      # or "original"
+    print(f"\n===== RUNNING PIPELINE WITH {image_type.upper()} IMAGES =====")
+
+
+    if image_type == "clean":
+        imgs_root = CLEAN_DIR
+    else:
+        imgs_root = ORIGINAL_DIR
+
+    train_images, test_images = get_celeba_image_np_arrays(
+        process_size=0.1, 
+        image_type=image_type,
+    )
     full_images = np.concatenate([train_images, test_images], axis=0)
 
     print("Getting UMAP embeddings...")
     embedding_dim = 1024
 
-    project_dir = Path(".").resolve()
-    data_dir = project_dir / "data" / "img_align_celeba" / "umap_embeddings"
-    if data_dir.exists():
-        print("UMAP embeddings found, loading from file...")
-        full_embeddings = load_umap_embeddings(
-            embedding_dim=embedding_dim, num_images=len(full_images)
-        )
-        train_embeddings = full_embeddings[: len(train_images)]
-        test_embeddings = full_embeddings[len(train_images) :]
+    if image_type == "clean":
+        umap_path = UMAP_CLEAN_DIR
     else:
-        print("UMAP embeddings not found, computing and saving new embeddings...")
+        umap_path = UMAP_ORIGINAL_DIR
+
+    if umap_path.exists() and len(list(umap_path.glob("*.npy"))) > 0:
+        print(f"UMAP embeddings found for '{image_type}', loading...")
+        full_embeddings = load_umap_embeddings(
+            embedding_dim=embedding_dim,
+            num_images=len(full_images),
+            image_type=image_type
+        )
+
+        # ← IMPORTANT FIX: reconstruct train/test embeddings
+        train_embeddings = full_embeddings[:len(train_images)]
+        test_embeddings  = full_embeddings[len(train_images):]
+
+    else:
+        print(f"No UMAP embeddings found for '{image_type}', computing...")
         full_embeddings, train_embeddings, test_embeddings = (
             get_and_save_umap_embeddings(
-                full_images, train_images, embedding_dim=embedding_dim
+                full_images, train_images,
+                embedding_dim=embedding_dim,
+                image_type=image_type
             )
         )
+
 
     print("Preparing datasets...")
     flat_train_loader, flat_test_loader = get_train_test_dataloaders(
@@ -127,7 +166,7 @@ def main():
     print(f"Using device: {device}")
 
     # NORMAL AUTOENCODER EPOCHS
-    normal_num_epochs = 1
+    normal_num_epochs = 100
     train_autoencoder(
         model=normal_autoencoder,
         dataloader=flat_train_loader,
@@ -138,10 +177,9 @@ def main():
     )
 
     print("Saving normal autoencoder model...")
-    project_dir = Path(".").resolve()
-    models_dir = project_dir / "models"
-    models_dir.mkdir(parents=True, exist_ok=True)
-    normal_model_path = models_dir / "celeba_normal_autoencoder.pth"
+    model_dir = MODEL_DIR
+    model_dir.mkdir(parents=True, exist_ok=True)
+    normal_model_path = model_dir / "celeba_normal_autoencoder.pth"
     torch.save(normal_autoencoder.state_dict(), normal_model_path)
 
     print("Starting UMAP autoencoder training...")
@@ -154,7 +192,7 @@ def main():
     umap_optimizer = torch.optim.Adam(umap_autoencoder.parameters(), lr=1e-3)
 
     # UMAP AUTOENCODER EPOCHS
-    umap_num_epochs = 1
+    umap_num_epochs = 100
     train_autoencoder_with_umap(
         model=umap_autoencoder,
         dataloader=flat_train_loader,
@@ -165,7 +203,7 @@ def main():
     )
 
     print("Saving UMAP autoencoder model...")
-    umap_model_path = models_dir / "celeba_umap_autoencoder.pth"
+    umap_model_path = MODEL_DIR / "celeba_umap_autoencoder.pth"
     torch.save(umap_autoencoder.state_dict(), umap_model_path)
 
     print("All done!!")

@@ -9,52 +9,85 @@ from PIL import Image
 import torch
 from torch.utils.data import Dataset
 from torchvision import datasets
+import shutil
 
 
-def download_celeba_data() -> None:
+# ==========================================================
+# DATA DIRECTORIES
+# ==========================================================
+DGX_ROOT = Path("/app")
+DATA_ROOT = DGX_ROOT / "data"
+DATA_DIR = DATA_ROOT / "img_align_celeba"
+
+ORIGINAL_DIR = DATA_DIR / "original"
+CLEAN_DIR    = DATA_DIR / "clean"
+
+# Ensure folders exist
+ORIGINAL_DIR.mkdir(parents=True, exist_ok=True)
+CLEAN_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def download_celeba_data():
     """
-    Download the CelebA dataset from Kaggle to the project root, under /data.
+    Safe version: Downloads CelebA only if not already present.
+    Handles nested extracted folders correctly.
     """
-    project_root = Path(__file__).resolve().parents[1]
-    data_dir = project_root / "data"
-    data_dir.mkdir(parents=True, exist_ok=True)
 
-    img_folder = data_dir / "img_align_celeba"
-    output_file = data_dir / "celeba-dataset.zip"
+    IMG_ROOT = Path("/app/data/img_align_celeba")
+    ORIGINAL_DIR = IMG_ROOT / "original"
 
-    if img_folder.exists():
-        print("Data is already downloaded. Skipping download.")
+    # If images already there → skip download
+    if ORIGINAL_DIR.exists() and any(ORIGINAL_DIR.glob("*.jpg")):
+        print("CelebA original images already present. Skipping download.")
         return
+
+    print("Downloading CelebA dataset from Kaggle...")
+
+    IMG_ROOT.mkdir(parents=True, exist_ok=True)
+    ORIGINAL_DIR.mkdir(exist_ok=True)
+
+    zip_path = IMG_ROOT / "celeba.zip"
 
     subprocess.run(
         [
             "curl",
             "-L",
             "-o",
-            str(output_file),
+            str(zip_path),
             "https://www.kaggle.com/api/v1/datasets/download/jessicali9530/celeba-dataset",
         ],
         check=True,
     )
 
-    print("Unzipping dataset...")
-    with zipfile.ZipFile(output_file, "r") as z:
-        z.extractall(data_dir)
+    print("Unzipping...")
+    with zipfile.ZipFile(zip_path, "r") as z:
+        z.extractall(IMG_ROOT)
 
-    print("Deleting zip and unused files...")
-    output_file.unlink()
-    # remove list_attr_celeba.csv, list_bbox_celeba.csv, list_eval_partition.csv and list_landmarks_align_celeba.csv
-    for file_name in [
-        "list_attr_celeba.csv",
-        "list_bbox_celeba.csv",
-        "list_eval_partition.csv",
-        "list_landmarks_align_celeba.csv",
-    ]:
-        file_path = data_dir / file_name
-        if file_path.exists():
-            file_path.unlink()
+    # 🔍 FIND where the .jpg files actually are (handles nested folders)
+    print("Locating extracted images...")
+    candidate_dirs = [
+        d for d in IMG_ROOT.rglob("*")
+        if d.is_dir() and any(f.suffix.lower() == ".jpg" for f in d.iterdir())
+    ]
 
-    print("Done")
+    if not candidate_dirs:
+        raise RuntimeError("Could not find any extracted .jpg files!")
+
+    extracted_jpg_dir = candidate_dirs[0]
+    print(f"Found images inside: {extracted_jpg_dir}")
+
+    print("Moving images into 'original/' folder...")
+    count = 0
+    for img in extracted_jpg_dir.glob("*.jpg"):
+        img.rename(ORIGINAL_DIR / img.name)
+        count += 1
+
+    print(f"Moved {count} images.")
+
+    # Remove ONLY extraction directory (not original)
+    shutil.rmtree(extracted_jpg_dir.parent, ignore_errors=True)
+
+    zip_path.unlink()
 
 
 def download_mnist_data() -> None:
@@ -94,7 +127,9 @@ def download_mnist_data() -> None:
 
 
 def get_celeba_image_np_arrays(
-    process_size: float = 0.01, train_size: float = 0.8
+    process_size: float = 0.01,
+    train_size: float = 0.8,
+    image_type: str = "clean"
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
     Load images from the CelebA dataset and return them as a numpy array.
@@ -102,34 +137,52 @@ def get_celeba_image_np_arrays(
 
     Args:
         process_size: Percentage of files to process. Between 0 and 1. Defaults to 0.01.
+        train_size: Percentage of images to use for training. Between 0 and 1. Defaults to 0.8.
+        image_type: Type of images to load, either "original" or "clean". Defaults to "clean".
 
     Returns:
         np.ndarray: Array of images with shape (N, 64, 64, 3)
     """
-    project_root = Path(__file__).resolve().parents[1]
-    data_dir = project_root / "data"
+    # === Select directory based on image_type ===
+    if image_type not in ["original", "clean"]:
+        raise ValueError("image_type must be 'original' or 'clean'")
 
-    imgs_dir = data_dir / "img_align_celeba" / "img_align_celeba"
+    if image_type == "clean":
+        imgs_dir = CLEAN_DIR
+        print("→ Using CLEAN images (background removed)")
+    else:
+        imgs_dir = ORIGINAL_DIR
+        print("→ Using ORIGINAL images")
+
+    # === Read image list ===
     paths = sorted([p for p in imgs_dir.iterdir() if p.suffix.lower() == ".jpg"])
+
+    if len(paths) == 0:
+        raise RuntimeError(f"No images found in {imgs_dir}. Did you download/clean them? Run 'celeba_clean_background.py' first.")
+
+    print(f"→ Found {len(paths)} '{image_type}' images in: {imgs_dir}")
+
+    # === Apply process_size (subsample) ===
     n = int(len(paths) * process_size)
     paths = paths[:n]
+    print(f"→ Processing {len(paths)} images (process_size = {process_size})")
 
-    print("Loading images...")
+    # === Load and resize ===
     imgs = []
-    i = 1
-    for p in paths:
-        print(f"Image {i}/{len(paths)}            ", end="\r")
-        i += 1
-
+    for i, p in enumerate(paths, start=1):
+        print(f"Loading image {i}/{len(paths)}          ", end="\r")
         img = Image.open(p).convert("RGB").resize((64, 64))
         imgs.append(np.array(img, dtype=np.float32) / 255.0)
 
-    imgs = np.stack(imgs, axis=0)  # (N, H, W, 3)
-    print(f"{len(imgs)} images loaded")
+    imgs = np.stack(imgs, axis=0)
+    print(f"\n→ Loaded {imgs.shape[0]} images.")
 
+    # === Train/Test split ===
     n_train = int(len(imgs) * train_size)
     train_imgs = imgs[:n_train]
     test_imgs = imgs[n_train:]
+
+    print(f"→ Split into {len(train_imgs)} train and {len(test_imgs)} test images.\n")
 
     return train_imgs, test_imgs
 
